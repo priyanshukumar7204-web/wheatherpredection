@@ -1,0 +1,255 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weather App</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Arial', sans-serif;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #fff;
+            overflow: hidden;
+            background: linear-gradient(to top, #6a11cb, #2575fc);
+        }
+
+        .weather-container {
+            display: flex;
+            flex-direction: row;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+        }
+
+        .weather-info {
+            flex: 1;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.7);
+        }
+
+        .weather-info h2 {
+            font-size: 40px;
+            margin-bottom: 20px;
+        }
+
+        .weather-info p {
+            font-size: 20px;
+            margin: 10px 0;
+        }
+
+        .search-bar {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        .search-bar input {
+            width: 60%;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 25px;
+            outline: none;
+            font-size: 18px;
+        }
+
+        .search-bar button {
+            margin-left: 10px;
+            padding: 10px 20px;
+            font-size: 18px;
+            color: #fff;
+            background-color: #ff9c00;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .search-bar button:hover {
+            background-color: #e68900;
+        }
+
+        .forecast-chart-container {
+            flex: 2;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .forecast-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-around;
+        }
+
+        .forecast-card {
+            background: rgba(0, 0, 0, 0.7);
+            padding: 20px;
+            margin: 10px;
+            border-radius: 15px;
+            width: 180px;
+            text-align: center;
+        }
+
+        .forecast-card h3 {
+            font-size: 22px;
+            margin-bottom: 10px;
+        }
+
+        .forecast-card p {
+            margin: 5px 0;
+        }
+
+        .forecast-card .date {
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        #weather-chart {
+            width: 100%;
+            height: 300px;
+            margin-top: 20px;
+        }
+
+        .icon {
+            font-size: 50px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="weather-container">
+        <div class="weather-info">
+            <div class="search-bar">
+                <input type="text" id="location" placeholder="Enter Address, City, or Zip Code">
+                <button onclick="fetchWeather()">Search</button>
+            </div>
+            <div id="weather-details">
+                <h2>Weather Details</h2>
+                <p class="icon">🌞</p>
+                <p>Temperature: --°C</p>
+                <p>Condition: --</p>
+                <p>Humidity: --%</p>
+            </div>
+        </div>
+        <div class="forecast-chart-container">
+            <div class="forecast-container" id="forecast-info">
+                <!-- 4-day forecast will appear here -->
+            </div>
+            <canvas id="weather-chart"></canvas>
+        </div>
+    </div>
+
+    <script>
+        async function fetchWeather() {
+            const location = document.getElementById('location').value;
+            if (!location) {
+                alert('Please enter a location.');
+                return;
+            }
+
+            try {
+                const response = await fetch(
+                    `http://api.weatherapi.com/v1/forecast.json?key=9bf6f0b710c442daaea115544252301&q=${location}&days=4&hour=1`
+                );
+                const data = await response.json();
+
+                const weatherDetails = document.getElementById('weather-details');
+                const isDay = data.current.is_day;
+                const icon = isDay ? '🌞' : '🌜';
+                
+                weatherDetails.innerHTML = `
+                    <h2>${data.location.name}, ${data.location.country}</h2>
+                    <p class="icon">${icon}</p>
+                    <p>Temperature: ${data.current.temp_c}°C</p>
+                    <p>Condition: ${data.current.condition.text}</p>
+                    <p>Humidity: ${data.current.humidity}%</p>
+                `;
+
+                updateBackground(data.current.condition.text.toLowerCase());
+
+                const forecastContainer = document.getElementById('forecast-info');
+                forecastContainer.innerHTML = '';
+
+                data.forecast.forecastday.forEach(day => {
+                    const forecastCard = document.createElement('div');
+                    forecastCard.classList.add('forecast-card');
+                    forecastCard.innerHTML = `
+                        <h3>${day.day.condition.text}</h3>
+                        <p class="date">${new Date(day.date).toLocaleDateString()}</p>
+                        <p>Temp: ${day.day.avgtemp_c}°C</p>
+                        <p>Humidity: ${day.day.avghumidity}%</p>
+                    `;
+                    forecastContainer.appendChild(forecastCard);
+                });
+
+                const hourlyData = data.forecast.forecastday[0].hour;
+                const times = hourlyData.map(hour => new Date(hour.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+                const temperatures = hourlyData.map(hour => hour.temp_c);
+
+                plotWeatherGraph(times, temperatures);
+
+            } catch (error) {
+                console.error('Unable to fetch weather data:', error);
+            }
+        }
+
+        function updateBackground(condition) {
+            const body = document.body;
+
+            if (condition.includes('sunny') || condition.includes('clear')) {
+                body.style.background = "linear-gradient(to top, #f7b733, #fc4a1a)";
+            } else if (condition.includes('cloudy')) {
+                body.style.background = "linear-gradient(to top, #bdc3c7, #2c3e50)";
+            } else if (condition.includes('rain')) {
+                body.style.background = "linear-gradient(to top, #4facfe, #00f2fe)";
+            } else if (condition.includes('snow')) {
+                body.style.background = "linear-gradient(to top, #e6e9f0, #eef1f5)";
+            } else if (condition.includes('fog') || condition.includes('mist')) {
+                body.style.background = "linear-gradient(to top, #8e9eab, #eef2f3)";
+            } else {
+                body.style.background = "linear-gradient(to top, #6a11cb, #2575fc)";
+            }
+        }
+
+        function plotWeatherGraph(times, temperatures) {
+            const ctx = document.getElementById('weather-chart').getContext('2d');
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: times,
+                    datasets: [{
+                        label: 'Temperature (°C)',
+                        data: temperatures,
+                        borderColor: '#000',
+                        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        x: { title: { display: true, text: 'Time of Day' } },
+                        y: { title: { display: true, text: 'Temperature (°C)' }, min: -10, max: 40 }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
